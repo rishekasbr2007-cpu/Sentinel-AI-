@@ -1,10 +1,15 @@
 // SentinelAI - shared front-end logic
 
 // Global historical buffer for line/bar charts
-let defaultHistory = { times: [], safe: [], warn: [], danger: [], quantum: [] };
+let defaultHistory = { 
+  times: [], safe: [], warn: [], danger: [], quantum: [],
+  totalSafe: 180, totalSuspicious: 25, totalFraud: 8, totalQuantum: 2,
+  vectors: { "Brute Force": 12, "Impossible Travel": 8, "Bad IP": 10, "Quantum": 2 },
+  lastSeenRefNum: 0
+};
 try {
-  let saved = sessionStorage.getItem("sentinel_history");
-  window.historyBuffer = saved ? JSON.parse(saved) : defaultHistory;
+  const cachedHistory = sessionStorage.getItem("sentinel_history");
+  window.historyBuffer = cachedHistory ? JSON.parse(cachedHistory) : defaultHistory;
 } catch (e) {
   window.historyBuffer = defaultHistory;
 }
@@ -42,25 +47,50 @@ async function runAnalysis(batchSize, onDone) {
       return;
     }
     
-    // Store current data for download export
-    window.currentBatchData = data.transactions ? [...data.transactions] : [];
-
-    // Reverse so the newest items are at the top of the table
+    // Update history buffer by processing new transactions (for spiky line graphs) and accumulating totals (for growing bar/pie charts)
     if (data.transactions) {
-      data.transactions.reverse();
-    }
-    
-    // Save to sessionStorage for instant cross-page rendering
-    try { sessionStorage.setItem("sentinel_cachedData", JSON.stringify(data)); } catch(e) {}
-    
-    // Update history buffer
-    if (data.summary) {
+      let newSafe = 0, newWarn = 0, newDanger = 0, newQuantum = 0;
+      
+      // Iterate from oldest to newest to capture chronological updates
+      let revTxs = [...data.transactions].reverse();
+      revTxs.forEach(t => {
+        let match = t.ref.match(/TX-SIM-(\d+)/);
+        let refNum = match ? parseInt(match[1]) : 0;
+        if (refNum > window.historyBuffer.lastSeenRefNum) {
+          window.historyBuffer.lastSeenRefNum = refNum;
+          
+          let isSafe = (t.risk_level === "Low" && !t.early_warning);
+          let isWarn = (t.risk_level === "Medium" || t.early_warning);
+          let isDanger = (t.risk_level === "High");
+          
+          if (isSafe) newSafe++;
+          if (isWarn) newWarn++;
+          if (isDanger) newDanger++;
+          if (t.quantum_flag) newQuantum++;
+          
+          window.historyBuffer.totalSafe += isSafe ? 1 : 0;
+          window.historyBuffer.totalSuspicious += isWarn ? 1 : 0;
+          window.historyBuffer.totalFraud += isDanger ? 1 : 0;
+          window.historyBuffer.totalQuantum += t.quantum_flag ? 1 : 0;
+          
+          if (!isSafe) {
+            let exp = (t.explanation || "").toLowerCase();
+            if (exp.includes("brute") || exp.includes("failed") || exp.includes("login")) window.historyBuffer.vectors["Brute Force"]++;
+            if (exp.includes("travel")) window.historyBuffer.vectors["Impossible Travel"]++;
+            if (exp.includes("ip")) window.historyBuffer.vectors["Bad IP"]++;
+            if (t.quantum_flag) window.historyBuffer.vectors["Quantum"]++;
+          }
+        }
+      });
+      
+      // If no new transactions (because we just loaded cached data), don't push flatlines, just reuse last point if needed, or push 0s
+      // Wait, if it's a live fetch, we always push to time series so the graph marches forward
       const time = new Date().toLocaleTimeString();
       window.historyBuffer.times.push(time);
-      window.historyBuffer.safe.push(data.summary.safe);
-      window.historyBuffer.warn.push(data.summary.suspicious);
-      window.historyBuffer.danger.push(data.summary.fraud_alerts);
-      window.historyBuffer.quantum.push(data.summary.quantum_flags);
+      window.historyBuffer.safe.push(newSafe);
+      window.historyBuffer.warn.push(newWarn);
+      window.historyBuffer.danger.push(newDanger);
+      window.historyBuffer.quantum.push(newQuantum);
       
       if (window.historyBuffer.times.length > 20) {
         window.historyBuffer.times.shift();
@@ -69,8 +99,19 @@ async function runAnalysis(batchSize, onDone) {
         window.historyBuffer.danger.shift();
         window.historyBuffer.quantum.shift();
       }
+      
+      // Overwrite data.summary with accumulating totals so pie charts shift and top metrics grow!
+      data.summary.safe = window.historyBuffer.totalSafe;
+      data.summary.suspicious = window.historyBuffer.totalSuspicious;
+      data.summary.fraud_alerts = window.historyBuffer.totalFraud;
+      data.summary.quantum_flags = window.historyBuffer.totalQuantum;
+      data.vectors = window.historyBuffer.vectors;
+      
       try { sessionStorage.setItem("sentinel_history", JSON.stringify(window.historyBuffer)); } catch(e) {}
     }
+    
+    // Save to sessionStorage for instant cross-page rendering
+    try { sessionStorage.setItem("sentinel_cachedData", JSON.stringify(data)); } catch(e) {}
 
     if (onDone) onDone(data);
   } catch (err) {

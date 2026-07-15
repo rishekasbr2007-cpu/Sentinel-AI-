@@ -44,14 +44,7 @@
 let barChart, lineChart, scatterChart;
 function renderAnalytics(data) {
   // Bar Chart (Attack vectors)
-  let vectors = { "Brute Force": 0, "Impossible Travel": 0, "Bad IP": 0, "Quantum": 0 };
-  data.transactions.filter(t => t.risk_level !== "Low").forEach(t => {
-    let exp = t.explanation.toLowerCase();
-    if (exp.includes("brute") || exp.includes("failed") || exp.includes("login")) vectors["Brute Force"]++;
-    if (exp.includes("travel")) vectors["Impossible Travel"]++;
-    if (exp.includes("ip")) vectors["Bad IP"]++;
-    if (t.quantum_flag) vectors["Quantum"]++;
-  });
+  let vectors = data.vectors || { "Brute Force": 0, "Impossible Travel": 0, "Bad IP": 0, "Quantum": 0 };
   
   const barCtx = document.getElementById("barChart");
   const barData = {
