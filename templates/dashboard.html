@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block page_title %}Dashboard{% endblock %}
+{% block header_title %}Overview{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+  <div style="color:var(--muted); font-size:13.5px;">Live view across banking transactions + cybersecurity telemetry</div>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <label style="font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px;">
+      <input type="checkbox" onchange="toggleLiveMode(this, 30, renderDashboard)"> Live Mode (auto-refresh every 15s)
+    </label>
+    <button class="btn-cta" style="padding:6px 12px; font-size:12px; background:#202126; border:1px solid var(--border); color:var(--text);" onclick="downloadData()">Download Data</button>
+    <button id="runBtn" class="btn-run" onclick="runAnalysis(30, renderDashboard)">Run Live Analysis</button>
+  </div>
+</div>
+
+<div class="grid grid-4" style="margin-bottom:18px;">
+  <div class="card stat-card safe"><div class="stat-value" id="statSafe">–</div><div class="stat-label">Safe Transactions</div></div>
+  <div class="card stat-card warn"><div class="stat-value" id="statSuspicious">–</div><div class="stat-label">Suspicious</div></div>
+  <div class="card stat-card danger"><div class="stat-value" id="statFraud">–</div><div class="stat-label">Fraud Alerts</div></div>
+  <div class="card stat-card quantum"><div class="stat-value" id="statQuantum">–</div><div class="stat-label">Quantum Risk Flags</div></div>
+</div>
+
+<div class="grid grid-2" style="margin-bottom:18px;">
+  <div class="card stat-card" style="display:flex; justify-content:space-between; align-items:center;">
+    <div><div class="stat-label">AI Model Accuracy</div><div class="stat-value" id="statAccuracy" style="color:#00fff2;">–%</div></div>
+    <div style="text-align:right;"><div class="stat-label">Total Feedback</div><div class="stat-value" id="statFeedback" style="font-size:24px;">–</div></div>
+  </div>
+  <div class="card stat-card" style="display:flex; justify-content:space-between; align-items:center;">
+    <div><div class="stat-label">False Positive Rate</div><div class="stat-value" id="statFP" style="color:#ffb800;">–%</div></div>
+  </div>
+</div>
+
+<div class="grid grid-2" style="margin-bottom:18px;">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h3 style="margin:0;">Risk Distribution</h3>
+      <button class="btn-run" style="padding:4px 8px; font-size:11px;" onclick="downloadChart('riskChart', 'RiskDistribution.png')">Download PNG</button>
+    </div>
+    <canvas id="riskChart" height="160"></canvas>
+  </div>
+  <div class="card">
+    <h3>Recent AI Explanations</h3>
+    <div id="explanationList" class="empty-state">Click "Run Live Analysis" to see AI-flagged transactions and why they were flagged.</div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let riskChart;
+
+async function refreshGlobalStats() {
+  const res = await fetch("/api/stats");
+  const data = await res.json();
+  document.getElementById("statAccuracy").innerText = data.accuracy + "%";
+  document.getElementById("statFP").innerText = data.fp_rate + "%";
+  document.getElementById("statFeedback").innerText = data.total_feedback;
+}
+
+// Call once on load
+refreshGlobalStats();
+
+function renderDashboard(data) {
+  const s = data.summary;
+  document.getElementById("statSafe").innerText = s.safe;
+  document.getElementById("statSuspicious").innerText = s.suspicious;
+  document.getElementById("statFraud").innerText = s.fraud_alerts;
+  document.getElementById("statQuantum").innerText = s.quantum_flags;
+
+  const ctx = document.getElementById("riskChart");
+  const chartData = {
+    labels: ["Safe", "Suspicious", "Fraud"],
+    datasets: [{
+      data: [s.safe, s.suspicious, s.fraud_alerts],
+      backgroundColor: ["#00ff9d", "#ffb800", "#ff2e63"],
+      borderWidth: 1,
+      borderColor: "#0a0e17"
+    }]
+  };
+  if (riskChart) { riskChart.data = chartData; riskChart.update(); }
+  else {
+    riskChart = new Chart(ctx, {
+      type: "doughnut",
+      data: chartData,
+      options: { plugins: { legend: { labels: { color: "#e5e9f0" } } } }
+    });
+  }
+
+  const flagged = data.transactions.filter(t => t.risk_level !== "Low").slice(0, 8);
+  const list = document.getElementById("explanationList");
+  if (flagged.length === 0) {
+    list.className = "empty-state";
+    list.innerText = "No suspicious activity in this batch.";
+  } else {
+    list.className = "";
+    list.innerHTML = flagged.map(t => `
+      <div class="slide-in" style="padding:10px 0; border-bottom:1px solid var(--border);">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div><span class="${t.early_warning ? 'pill pill-medium' : riskPillClass(t.risk_level)}" style="${t.early_warning ? 'background-color:#00fff2; border-color:#00fff2; color:#0a0e17;' : ''}">${t.early_warning ? 'Early Warning' : t.risk_level}</span><strong style="margin-left:8px; font-family:var(--font-mono); color:var(--text);">${t.ref}</strong></div>
+          <span style="color:var(--muted); font-size:11px; font-family:var(--font-mono);">${new Date().toLocaleTimeString()}</span>
+        </div>
+        <span style="color:var(--muted); font-size:13px; display:block; margin-top:6px;">${t.explanation}</span>
+        <div style="margin-top:8px; display:flex; gap:8px;">
+          ${t.analyst_feedback ? 
+            `<span class="pill ${t.analyst_feedback === 'Confirmed' ? 'pill-high' : 'pill-low'}" style="font-size:10px; padding:2px 6px;">${t.analyst_feedback}</span>` 
+            : 
+            `<button class="btn-run" style="font-size:10px; padding:3px 6px;" onclick="submitFeedback('${t.ref}', 'Confirmed', this)">Confirm Threat</button>
+             <button class="btn-false" onclick="submitFeedback('${t.ref}', 'False Alarm', this)">False Alarm</button>`
+          }
+        </div>
+      </div>`).join("");
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block page_title %}Admin Settings{% endblock %}
+{% block header_title %}Admin Settings{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+  <div style="color:var(--muted); font-size:13.5px;">Manage users and system settings</div>
+  <button class="btn-cta" style="padding:6px 12px; font-size:12px; background:#202126; border:1px solid var(--border); color:var(--text);" onclick="downloadData()">Download Data</button>
+</div>
+
+<div class="card" style="margin-bottom:18px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <h3 style="margin:0;">Authentication Activity</h3>
+    <button class="btn-run" style="padding:4px 8px; font-size:11px;" onclick="downloadChart('loginChart', 'AuthenticationActivity.png')">Download PNG</button>
+  </div>
+  <canvas id="loginChart" height="60"></canvas>
+</div>
+
+<div class="grid grid-2">
+  <div class="card">
+    <h3>Registered Users</h3>
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr class="slide-in">
+          <td>{{ u.full_name }}</td>
+          <td>{{ u.email }}</td>
+          <td><span class="pill pill-low">{{ u.role }}</span></td>
+          <td style="color:var(--muted); font-size:12px; font-family:var(--font-mono);">{{ u.created_at }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Recent Login Attempts</h3>
+    <table>
+      <thead><tr><th>Email</th><th>Result</th><th>Time</th></tr></thead>
+      <tbody>
+        {% for l in logins %}
+        <tr class="slide-in">
+          <td>{{ l.email }}</td>
+          <td>{% if l.success %}<span class="pill pill-low" style="box-shadow: 0 0 10px rgba(0,255,157,0.2);">Success</span>{% else %}<span class="pill pill-high" style="box-shadow: 0 0 10px rgba(255,46,99,0.2);">Failed</span>{% endif %}</td>
+          <td style="color:var(--muted); font-size:12px; font-family:var(--font-mono);">{{ l.created_at }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="empty-state">No login history yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const logins = [
+    {% for l in logins %}
+      { success: {{ 'true' if l.success else 'false' }} },
+    {% endfor %}
+  ];
+  if(logins.length === 0) return;
+  const succ = logins.filter(l => l.success).length;
+  const fail = logins.filter(l => !l.success).length;
+  
+  new Chart(document.getElementById("loginChart"), {
+    type: 'bar',
+    data: {
+      labels: ["Successful Logins", "Failed Logins"],
+      datasets: [{
+        label: "Attempts",
+        data: [succ, fail],
+        backgroundColor: ["#00ff9d", "#ff2e63"],
+        borderWidth: 1, borderColor: "#0a0e17"
+      }]
+    },
+    options: { indexAxis: 'y', plugins: { legend: { display: false } } }
+  });
+});
+</script>
+{% endblock %}

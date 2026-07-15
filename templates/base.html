@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SentinelAI | {% block page_title %}Dashboard{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="shell">
+
+
+    <div class="main">
+      <div class="topbar">
+        <div class="title">{% block header_title %}Dashboard{% endblock %}</div>
+        <div class="user">
+          <span class="badge">{{ current_user_role }}</span>
+          <span>{{ current_user_name }}</span>
+          <a class="logout" href="{{ url_for('logout') }}">Log out</a>
+        </div>
+      </div>
+      <div class="content">
+        {% if not model_ready %}
+        <div class="warning-banner">
+          ⚠ Model not trained yet. Run <code>python model/train_model.py</code> after placing the real datasets in
+          <code>data/raw/</code> (see <code>data/raw/README.md</code>).
+        </div>
+        {% endif %}
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Radial Menu -->
+  <div class="radial-menu-container" id="radial-menu">
+    <button class="radial-center-btn" id="radial-center-btn" aria-label="Navigation Menu">🛡</button>
+    <div class="radial-items" id="radial-items">
+      <a href="{{ url_for('dashboard') }}" class="radial-item" data-tooltip="Dashboard">📊</a>
+      <a href="{{ url_for('live_monitoring') }}" class="radial-item" data-tooltip="Live Transaction Monitoring">💳</a>
+      <a href="{{ url_for('cyber_telemetry') }}" class="radial-item" data-tooltip="Cybersecurity Telemetry">🌐</a>
+      <a href="{{ url_for('threat_detection') }}" class="radial-item" data-tooltip="AI Threat Detection">🧠</a>
+      <a href="{{ url_for('fraud_analytics') }}" class="radial-item" data-tooltip="Fraud Analytics">📈</a>
+      <a href="{{ url_for('quantum_risk') }}" class="radial-item" data-tooltip="Quantum Risk Monitor">⚛</a>
+      <a href="{{ url_for('attack_chain') }}" class="radial-item" data-tooltip="Attack Chain">🕸</a>
+      <a href="{{ url_for('predictive_risk') }}" class="radial-item" data-tooltip="Predictive Risk">🔮</a>
+      <a href="{{ url_for('reports') }}" class="radial-item" data-tooltip="Reports &amp; Alerts">📄</a>
+      <a href="{{ url_for('admin_settings') }}" class="radial-item" data-tooltip="Admin Settings">⚙</a>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/radial_menu.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

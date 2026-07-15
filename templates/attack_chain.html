@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block page_title %}Attack Chain Reconstruction{% endblock %}
+{% block header_title %}Attack Chain Reconstruction{% endblock %}
+
+{% block content %}
+<script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+
+<div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+  <div style="color:var(--muted); font-size:13.5px;">Auto-correlates telemetry and transactions based on Account ID, IP, and time windows</div>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <label style="font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px;">
+      <input type="checkbox" onchange="toggleLiveMode(this, 200, renderChain)"> Live Mode
+    </label>
+    <button class="btn-cta" style="padding:6px 12px; font-size:12px; background:#202126; border:1px solid var(--border); color:var(--text);" onclick="downloadData()">Download Data</button>
+    <button id="runBtn" class="btn-run" onclick="runAnalysis(200, renderChain)">Reconstruct Attack Chains</button>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <h3 style="margin:0;">Active Attack Graphs</h3>
+  </div>
+  <div id="mynetwork" style="height: 600px; background-color:#0a0e17; border-radius:8px; border:1px solid var(--border);"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let network = null;
+
+function renderChain(data) {
+  // We want to link nodes that share account_id or ip_address.
+  const nodes = new vis.DataSet();
+  const edges = new vis.DataSet();
+  
+  // Only look at suspicious/flagged transactions for the graph to reduce noise
+  const suspicious = data.transactions.filter(t => t.risk_level !== 'Low' || t.early_warning);
+  
+  if(suspicious.length === 0) {
+    document.getElementById('mynetwork').innerHTML = '<div class="empty-state" style="padding-top:200px;">No suspicious activity to link.</div>';
+    return;
+  }
+  const edgesArr = [];
+  
+  // Create edges based on correlation
+  for(let i=0; i<suspicious.length; i++) {
+    for(let j=i+1; j<suspicious.length; j++) {
+      let t1 = suspicious[i];
+      let t2 = suspicious[j];
+      
+      if(t1.account_id === t2.account_id) {
+        edgesArr.push({ from: t1.ref, to: t2.ref, label: 'Same Account', font: { color: '#7a8699', size: 10, align: 'middle' }, color: { color: '#3b4252' }, arrows: 'to' });
+      }
+      else if(t1.ip_address === t2.ip_address) {
+        edgesArr.push({ from: t1.ref, to: t2.ref, label: 'Same IP', font: { color: '#7a8699', size: 10, align: 'middle' }, color: { color: '#3b4252' }, arrows: 'to' });
+      }
+    }
+  }
+
+  if(edgesArr.length === 0) {
+    document.getElementById('mynetwork').innerHTML = '<div class="empty-state" style="padding-top:200px;">No correlated attack chains detected yet. Waiting for live data matches...</div>';
+    return;
+  }
+  
+  document.getElementById('mynetwork').innerHTML = ''; // clear empty state
+
+  // Get nodes that are part of an edge
+  const connectedRefs = new Set();
+  edgesArr.forEach(e => {
+    connectedRefs.add(e.from);
+    connectedRefs.add(e.to);
+  });
+
+  // Add nodes (only connected ones)
+  suspicious.filter(t => connectedRefs.has(t.ref)).forEach(t => {
+    let color = t.risk_level === 'High' ? '#ff2e63' : (t.early_warning ? '#00fff2' : '#ffb800');
+    nodes.add({
+      id: t.ref,
+      label: t.ref + '\n$' + (t.amount || 0) + '\n' + (t.early_warning ? 'Warning' : t.risk_level),
+      shape: 'box',
+      color: {
+        background: color,
+        border: color,
+        highlight: { background: '#a855f7', border: '#a855f7' }
+      },
+      font: { color: '#e6f1ff', face: 'Fira Code', size: 12 },
+      title: 'Account: ' + t.account_id + '<br>IP: ' + t.ip_address + '<br>' + t.explanation
+    });
+  });
+
+  edges.add(edgesArr);
+
+
+  const container = document.getElementById('mynetwork');
+  const graphData = { nodes: nodes, edges: edges };
+  const options = {
+    physics: {
+      barnesHut: { gravitationalConstant: -2000, centralGravity: 0.3, springLength: 95 }
+    },
+    interaction: { hover: true, tooltipDelay: 200 }
+  };
+  
+  if (network) {
+    network.setData(graphData);
+  } else {
+    network = new vis.Network(container, graphData, options);
+  }
+}
+</script>
+{% endblock %}

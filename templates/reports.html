@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block page_title %}Reports & Alerts{% endblock %}
+{% block header_title %}Reports &amp; Alerts{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+  <div style="color:var(--muted); font-size:13.5px;">Every "Run Live Analysis" click saves Medium/High risk transactions here as a permanent alert log.</div>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <label style="font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px;">
+      <input type="checkbox" id="reportsLiveToggle" onchange="toggleReportsLiveMode(this)"> Live Mode
+    </label>
+    <button class="btn-cta" style="padding:6px 12px; font-size:12px; background:#202126; border:1px solid var(--border); color:var(--text);" onclick="downloadData()">Download Data</button>
+  </div>
+</div>
+
+<div class="grid grid-2" style="margin-bottom:18px;">
+  <div class="card stat-card" style="display:flex; justify-content:space-between; align-items:center;">
+    <div><div class="stat-label">AI Model Accuracy</div><div class="stat-value" id="statAccuracy" style="color:#00fff2;">–%</div></div>
+    <div style="text-align:right;"><div class="stat-label">Total Feedback</div><div class="stat-value" id="statFeedback" style="font-size:24px;">–</div></div>
+  </div>
+  <div class="card stat-card" style="display:flex; justify-content:space-between; align-items:center;">
+    <div><div class="stat-label">False Positive Rate</div><div class="stat-value" id="statFP" style="color:#ffb800;">–%</div></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:18px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <h3 style="margin:0;">Historical Alerts Trend</h3>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-run" style="padding:4px 8px; font-size:11px;" onclick="downloadChart('alertsChart', 'HistoricalAlerts.png')">Download PNG</button>
+      <button class="btn-run" style="padding:4px 8px; font-size:11px;" onclick="window.print()">Export PDF</button>
+    </div>
+  </div>
+  <canvas id="alertsChart" height="60"></canvas>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>#</th><th>Transaction Ref</th><th>Risk Score</th><th>Risk Level</th><th>Quantum</th><th>Status</th><th>Logged At</th></tr>
+    </thead>
+    <tbody>
+      {% for a in alerts %}
+      <tr class="slide-in">
+        <td style="font-family:var(--font-mono);">{{ a.id }}</td>
+        <td style="font-family:var(--font-mono);">{{ a.transaction_ref }}</td>
+        <td style="font-family:var(--font-mono);">{{ "%.1f"|format(a.risk_score) }}</td>
+        <td><span class="pill {{ 'pill-high' if a.risk_level=='High' else 'pill-medium' }}">{{ a.risk_level }}</span></td>
+        <td>{% if a.quantum_flag %}<span class="pill pill-quantum" style="box-shadow: 0 0 10px var(--quantum-glow);">Flagged</span>{% else %}—{% endif %}</td>
+        <td>
+          {% if a.analyst_feedback %}
+            <span class="pill {{ 'pill-high' if a.analyst_feedback == 'Confirmed' else 'pill-low' }}">{{ a.analyst_feedback }}</span>
+          {% else %}
+            <div style="display:flex; gap:6px;">
+              <button class="btn-run" style="font-size:10px; padding:3px 6px;" onclick="submitFeedback('{{ a.transaction_ref }}', 'Confirmed', this)">Confirm</button>
+              <button class="btn-run" style="font-size:10px; padding:3px 6px; background:transparent; border-color:var(--muted); color:var(--muted);" onclick="submitFeedback('{{ a.transaction_ref }}', 'False Alarm', this)">False Alarm</button>
+            </div>
+          {% endif %}
+        </td>
+        <td style="color:var(--muted); font-size:12px; font-family:var(--font-mono);">{{ a.created_at }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty-state">No alerts logged yet. Go run a live analysis from the Dashboard.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let reportsLiveTimer = null;
+function toggleReportsLiveMode(checkbox) {
+  localStorage.setItem("liveMode_" + window.location.pathname, checkbox.checked ? "true" : "false");
+  if (checkbox.checked) {
+    reportsLiveTimer = setInterval(() => window.location.reload(), 15000);
+  } else {
+    if (reportsLiveTimer) clearInterval(reportsLiveTimer);
+  }
+}
+
+async function refreshGlobalStats() {
+  const res = await fetch("/api/stats");
+  const data = await res.json();
+  document.getElementById("statAccuracy").innerText = data.accuracy + "%";
+  document.getElementById("statFP").innerText = data.fp_rate + "%";
+  document.getElementById("statFeedback").innerText = data.total_feedback;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const cb = document.getElementById("reportsLiveToggle");
+  if (cb) {
+    cb.checked = localStorage.getItem("liveMode_" + window.location.pathname) === "true";
+    if (cb.checked) toggleReportsLiveMode(cb);
+  }
+
+  refreshGlobalStats();
+  const alerts = [
+    {% for a in alerts %}
+      { risk: "{{a.risk_level}}", quantum: {{a.quantum_flag}} },
+    {% endfor %}
+  ];
+  
+  if (alerts.length === 0) return;
+  
+  const high = alerts.filter(a => a.risk === 'High').length;
+  const medium = alerts.filter(a => a.risk === 'Medium').length;
+  const quantum = alerts.filter(a => a.quantum).length;
+  
+  const ctx = document.getElementById("alertsChart");
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ["High Risk", "Medium Risk", "Quantum Flags"],
+      datasets: [{
+        label: "Total Historical Alerts",
+        data: [high, medium, quantum],
+        backgroundColor: ["#ff2e63", "#ffb800", "#b45eff"],
+        borderWidth: 1, borderColor: "#0a0e17"
+      }]
+    },
+    options: { plugins: { legend: { display: false } } }
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block page_title %}Predictive Risk{% endblock %}
+{% block header_title %}Predictive Risk{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+  <div style="color:var(--muted); font-size:13.5px;">Anticipating future compromised accounts by correlating Quantum risks + Behavioral drift.</div>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <label style="font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px;">
+      <input type="checkbox" onchange="toggleLiveMode(this, 40, renderPredictive)"> Live Mode
+    </label>
+    <button class="btn-cta" style="padding:6px 12px; font-size:12px; background:#202126; border:1px solid var(--border); color:var(--text);" onclick="downloadData()">Download Data</button>
+    <button id="runBtn" class="btn-run" onclick="runAnalysis(40, renderPredictive)">Run Live Analysis</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Accounts at Future Risk</h3>
+  <table>
+    <thead><tr><th>Account ID</th><th>Future Risk Score</th><th>Vulnerabilities Detected</th><th>Analyst Recommendation</th></tr></thead>
+    <tbody id="predictiveBody">
+      <tr><td colspan="4" class="empty-state">Run a scan to identify at-risk accounts.</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function renderPredictive(data) {
+  const accounts = {};
+  
+  // Aggregate risks per account
+  data.transactions.forEach(t => {
+    if(!accounts[t.account_id]) accounts[t.account_id] = { quantum: false, early: false, ip: t.ip_address };
+    if(t.quantum_flag) accounts[t.account_id].quantum = true;
+    if(t.early_warning) accounts[t.account_id].early = true;
+  });
+
+  const atRisk = [];
+  for (const acc in accounts) {
+    const a = accounts[acc];
+    if(a.quantum && a.early) {
+      atRisk.push({ id: acc, score: 95, vulns: 'Legacy Encryption + Behavioral Drift', rec: 'Force Password Reset & Upgrade TLS', level: 'High' });
+    } else if (a.early) {
+      atRisk.push({ id: acc, score: 70, vulns: 'Behavioral Drift Only', rec: 'Monitor Account Closely', level: 'Medium' });
+    } else if (a.quantum) {
+      atRisk.push({ id: acc, score: 60, vulns: 'Legacy Encryption (' + a.ip + ')', rec: 'Issue Security Warning to User', level: 'Medium' });
+    }
+  }
+
+  // Sort by score descending
+  atRisk.sort((a,b) => b.score - a.score);
+
+  const tbody = document.getElementById("predictiveBody");
+  if(atRisk.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No future risk accounts identified in current window.</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = atRisk.map(a => `
+    <tr class="slide-in">
+      <td style="font-family:var(--font-mono); font-weight:bold;">${a.id}</td>
+      <td>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div style="width:100px; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; overflow:hidden;">
+            <div style="width:${a.score}%; height:100%; background:${a.score > 80 ? '#ff2e63' : (a.score > 65 ? '#ffb800' : '#b45eff')};"></div>
+          </div>
+          <span style="font-family:var(--font-mono); color:${a.score > 80 ? '#ff2e63' : '#e6f1ff'};">${a.score}%</span>
+        </div>
+      </td>
+      <td style="color:var(--muted); font-size:13px;">${a.vulns}</td>
+      <td><span class="pill pill-${a.level.toLowerCase()}">${a.rec}</span></td>
+    </tr>
+  `).join("");
+}
+</script>
+{% endblock %}

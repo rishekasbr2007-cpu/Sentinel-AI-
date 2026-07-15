@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block page_title %}AI Threat Detection{% endblock %}
+{% block header_title %}AI Threat Detection{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+  <div style="color:var(--muted); font-size:13.5px;">AI decisions broken down by threat vectors and confidence scores</div>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <label style="font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px;">
+      <input type="checkbox" onchange="toggleLiveMode(this, 30, renderThreats)"> Live Mode
+    </label>
+    <button class="btn-cta" style="padding:6px 12px; font-size:12px; background:#202126; border:1px solid var(--border); color:var(--text);" onclick="downloadData()">Download Data</button>
+    <button id="runBtn" class="btn-run" onclick="runAnalysis(30, renderThreats)">Run Live Analysis</button>
+  </div>
+</div>
+
+<div id="threatCards" class="grid grid-2">
+  <div class="empty-state" style="grid-column: 1 / -1;">Click "Run Live Analysis" to see AI predictions with explanations.</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.gauge {
+  width: 50px; height: 50px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; font-size: 13px; font-weight: bold; font-family: var(--font-mono);
+}
+.gauge::before {
+  content: ''; position: absolute; top: 4px; left: 4px; right: 4px; bottom: 4px;
+  background: var(--panel); border-radius: 50%;
+}
+.gauge span { position: relative; z-index: 1; }
+</style>
+<script>
+function renderThreats(data) {
+  const flagged = data.transactions.filter(t => t.risk_level !== "Low").sort((a,b)=>b.risk_score-a.risk_score);
+  const el = document.getElementById("threatCards");
+  if (!flagged.length) {
+    el.className = "empty-state";
+    el.innerHTML = "No threats detected in this batch.";
+    return;
+  }
+  el.className = "grid grid-2";
+  el.innerHTML = flagged.map(t => {
+    let color = t.risk_level === 'High' ? 'var(--danger)' : 'var(--warn)';
+    let riskPill = `<span class="${riskPillClass(t.risk_level)}">${t.risk_level}</span>`;
+    let earlyWarningBadge = '';
+    
+    if (t.early_warning) {
+      color = '#00fff2'; // Neon cyan for early warning
+      riskPill = `<span class="pill pill-medium" style="background-color:#00fff2; border-color:#00fff2; color:#0a0e17;">Early Warning</span>`;
+      let detectedTime = new Date();
+      let normalCatchTime = new Date(detectedTime.getTime() + 4.5*60000); 
+      earlyWarningBadge = `<div style="font-size:10px; color:#00fff2; margin-top:4px;">Detected: ${detectedTime.toLocaleTimeString()} | Est. Rules Catch: ${normalCatchTime.toLocaleTimeString()} (Saved ~4.5m)</div>`;
+    }
+    
+    let feedbackUI = '';
+    if (t.analyst_feedback) {
+      feedbackUI = `<div style="margin-top:8px;"><span class="pill ${t.analyst_feedback === 'Confirmed' ? 'pill-high' : 'pill-low'}" style="font-size:10px; padding:2px 6px;">${t.analyst_feedback}</span></div>`;
+    } else {
+      feedbackUI = `<div style="margin-top:8px; display:flex; gap:6px;">
+        <button class="btn-run" style="font-size:10px; padding:3px 6px;" onclick="submitFeedback('${t.ref}', 'Confirmed', this)">Confirm Threat</button>
+        <button class="btn-run" style="font-size:10px; padding:3px 6px; background:transparent; border-color:var(--muted); color:var(--muted);" onclick="submitFeedback('${t.ref}', 'False Alarm', this)">False Alarm</button>
+      </div>`;
+    }
+
+    return `
+    <div class="card slide-in" style="display:flex; gap:16px; align-items:center;">
+      <div class="gauge" style="background: conic-gradient(${color} ${t.risk_score}%, #1f2937 ${t.risk_score}%);">
+        <span style="color:${color}">${t.risk_score.toFixed(0)}</span>
+      </div>
+      <div style="flex:1;">
+        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+          <strong style="font-family:var(--font-mono); font-size:14px; color:var(--text);">${t.ref}</strong>
+          ${riskPill}
+        </div>
+        <div style="color:var(--muted); font-size:12.5px; line-height:1.5;">
+          <strong style="color:var(--text);">AI Verdict:</strong> ${t.explanation}
+        </div>
+        ${earlyWarningBadge}
+        ${t.quantum_flag ? '<div style="margin-top:4px;"><span class="pill pill-quantum">Quantum-Vulnerable Session</span></div>' : ''}
+        ${feedbackUI}
+      </div>
+    </div>`;
+  }).join("");
+}
+</script>
+{% endblock %}

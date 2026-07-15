@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block page_title %}Fraud Analytics{% endblock %}
+{% block header_title %}Fraud Analytics{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+  <div style="color:var(--muted); font-size:13.5px;">Real-time analysis of attack vectors and fraud metrics</div>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <label style="font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px;">
+      <input type="checkbox" onchange="toggleLiveMode(this, 100, renderAnalytics)"> Live Mode
+    </label>
+    <button class="btn-cta" style="padding:6px 12px; font-size:12px; background:#202126; border:1px solid var(--border); color:var(--text);" onclick="downloadData()">Download Data</button>
+    <button id="runBtn" class="btn-run" onclick="runAnalysis(100, renderAnalytics)">Run Live Analysis</button>
+  </div>
+</div>
+
+<div class="grid grid-2" style="margin-bottom:18px;">
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h3 style="margin:0;">Fraud Volume Over Time</h3>
+      <button class="btn-run" style="padding:4px 8px; font-size:11px;" onclick="downloadChart('lineChart', 'FraudVolume.png')">Download PNG</button>
+    </div>
+    <canvas id="lineChart" height="150"></canvas>
+  </div>
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h3 style="margin:0;">Attack Vectors (Current Batch)</h3>
+      <button class="btn-run" style="padding:4px 8px; font-size:11px;" onclick="downloadChart('barChart', 'AttackVectors.png')">Download PNG</button>
+    </div>
+    <canvas id="barChart" height="150"></canvas>
+  </div>
+</div>
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <h3 style="margin:0;">Threat Heatmap (Amount vs Location)</h3>
+    <button class="btn-run" style="padding:4px 8px; font-size:11px;" onclick="downloadChart('scatterChart', 'ThreatHeatmap.png')">Download PNG</button>
+  </div>
+  <canvas id="scatterChart" height="100"></canvas>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let barChart, lineChart, scatterChart;
+function renderAnalytics(data) {
+  // Bar Chart (Attack vectors)
+  let vectors = { "Brute Force": 0, "Impossible Travel": 0, "Bad IP": 0, "Quantum": 0 };
+  data.transactions.filter(t => t.risk_level !== "Low").forEach(t => {
+    let exp = t.explanation.toLowerCase();
+    if (exp.includes("brute") || exp.includes("failed") || exp.includes("login")) vectors["Brute Force"]++;
+    if (exp.includes("travel")) vectors["Impossible Travel"]++;
+    if (exp.includes("ip")) vectors["Bad IP"]++;
+    if (t.quantum_flag) vectors["Quantum"]++;
+  });
+  
+  const barCtx = document.getElementById("barChart");
+  const barData = {
+    labels: Object.keys(vectors),
+    datasets: [{ label: "Alerts", data: Object.values(vectors), backgroundColor: "#00fff2" }]
+  };
+  if (barChart) { barChart.data = barData; barChart.update(); }
+  else {
+    barChart = new Chart(barCtx, { type: "bar", data: barData, options: { plugins: { legend: { display: false } } } });
+  }
+
+  // Line Chart
+  const lineCtx = document.getElementById("lineChart");
+  const lineData = {
+    labels: window.historyBuffer.times,
+    datasets: [{
+      label: "Fraud Alerts",
+      data: window.historyBuffer.danger,
+      borderColor: "#ff2e63",
+      backgroundColor: "rgba(255, 46, 99, 0.1)",
+      borderWidth: 2, fill: true, tension: 0.4, pointBackgroundColor: "#ff2e63"
+    }]
+  };
+  if (lineChart) { lineChart.data = lineData; lineChart.update(); }
+  else {
+    lineChart = new Chart(lineCtx, { type: "line", data: lineData, options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, suggestedMax: 5 } } } });
+  }
+
+  // Scatter/Bubble Chart
+  const scatterCtx = document.getElementById("scatterChart");
+  const locations = [...new Set(data.transactions.map(t => t.location || "Unknown"))];
+  const scatterPts = data.transactions.filter(t => t.risk_level !== "Low").map(t => ({
+    x: locations.indexOf(t.location || "Unknown"),
+    y: t.amount || 0,
+    r: Math.max(5, (t.risk_score / 8))
+  }));
+  
+  const scatterData = {
+    datasets: [{
+      label: "Suspicious Transactions",
+      data: scatterPts,
+      backgroundColor: "rgba(255, 184, 0, 0.6)",
+      borderColor: "#ffb800",
+      borderWidth: 1
+    }]
+  };
+  if (scatterChart) { scatterChart.data = scatterData; scatterChart.options.scales.x.labels = locations; scatterChart.update(); }
+  else {
+    scatterChart = new Chart(scatterCtx, {
+      type: "bubble",
+      data: scatterData,
+      options: {
+        scales: {
+          x: { type: 'category', labels: locations },
+          y: { title: { display: true, text: 'Amount ($)', color: '#7a8699' }, ticks: { color: '#7a8699' } }
+        }
+      }
+    });
+  }
+}
+</script>
+{% endblock %}

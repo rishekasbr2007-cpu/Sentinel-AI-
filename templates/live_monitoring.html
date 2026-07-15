@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block page_title %}Live Transaction Monitoring{% endblock %}
+{% block header_title %}Live Transaction Monitoring{% endblock %}
+
+{% block content %}
+<div style="margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+  <div style="color:var(--muted); font-size:13.5px;">Real transactions from the held-out test split, scored live by the model</div>
+  <div style="display:flex; align-items:center; gap:14px;">
+    <label style="font-size:13px; color:var(--muted); display:flex; align-items:center; gap:6px;">
+      <input type="checkbox" onchange="toggleLiveMode(this, 40, renderTable)"> Live Mode (auto-refresh every 15s)
+    </label>
+    <button class="btn-cta" style="padding:6px 12px; font-size:12px; background:#202126; border:1px solid var(--border); color:var(--text);" onclick="downloadData()">Download Data</button>
+    <button id="runBtn" class="btn-run" onclick="runAnalysis(40, renderTable)">Run Live Analysis</button>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:18px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <h3 style="margin:0;">Live Risk Trend</h3>
+    <button class="btn-run" style="padding:4px 8px; font-size:11px;" onclick="downloadChart('riskTrendChart', 'RiskTrend.png')">Download PNG</button>
+  </div>
+  <canvas id="riskTrendChart" height="60"></canvas>
+</div>
+
+<div class="card">
+  <table id="txTable">
+    <thead>
+      <tr><th>Ref</th><th>Location</th><th>Amount</th><th>Risk Level</th><th>AI Explanation</th></tr>
+    </thead>
+    <tbody id="txBody">
+      <tr><td colspan="5" class="empty-state">Click "Run Live Analysis" to load and score real transactions.</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function renderTable(data) {
+  const body = document.getElementById("txBody");
+  if (!data.transactions.length) {
+    body.innerHTML = `<tr><td colspan="5" class="empty-state">No data returned.</td></tr>`;
+    return;
+  }
+  body.innerHTML = data.transactions.map(t => {
+    let riskPill = `<span class="${riskPillClass(t.risk_level)}">${t.risk_level}</span>`;
+    let earlyWarningBadge = '';
+    if (t.early_warning) {
+      riskPill = `<span class="pill pill-medium" style="background-color:#00fff2; border-color:#00fff2; color:#0a0e17;">Early Warning</span>`;
+      let detectedTime = new Date();
+      let normalCatchTime = new Date(detectedTime.getTime() + 4.5*60000); // ~4.5 mins later
+      earlyWarningBadge = `<br><span style="font-size:10px; color:#00fff2;">Detected: ${detectedTime.toLocaleTimeString()} | Est. Normal Catch: ${normalCatchTime.toLocaleTimeString()} (Saved ~4.5m)</span>`;
+    }
+    
+    let feedbackUI = '';
+    if (t.risk_level !== 'Low' || t.early_warning) {
+      if (t.analyst_feedback) {
+        feedbackUI = `<div style="margin-top:6px;"><span class="pill ${t.analyst_feedback === 'Confirmed' ? 'pill-high' : 'pill-low'}" style="font-size:10px; padding:2px 6px;">${t.analyst_feedback}</span></div>`;
+      } else {
+        feedbackUI = `<div style="margin-top:6px; display:flex; gap:6px;">
+          <button class="btn-run" style="font-size:10px; padding:3px 6px;" onclick="submitFeedback('${t.ref}', 'Confirmed', this)">Confirm Threat</button>
+          <button class="btn-run" style="font-size:10px; padding:3px 6px; background:transparent; border-color:var(--muted); color:var(--muted);" onclick="submitFeedback('${t.ref}', 'False Alarm', this)">False Alarm</button>
+        </div>`;
+      }
+    }
+
+    return `
+    <tr class="slide-in">
+      <td style="font-family:var(--font-mono);">${t.ref}</td>
+      <td>${t.location || 'N/A'}</td>
+      <td style="font-family:var(--font-mono);">$${t.amount ? t.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '0.00'}</td>
+      <td>${riskPill}
+          ${t.quantum_flag ? '<span class="pill pill-quantum" style="margin-left:4px;">Quantum</span>' : ''}
+      </td>
+      <td style="color:var(--muted); font-size:12.5px;">${t.explanation}${earlyWarningBadge}${feedbackUI}</td>
+    </tr>`;
+  }).join("");
+
+  let avgRisk = 0;
+  if (data.transactions.length) {
+    avgRisk = data.transactions.reduce((acc, t) => acc + t.risk_score, 0) / data.transactions.length;
+  }
+  
+  if (!window.riskScoreHistory) window.riskScoreHistory = [];
+  window.riskScoreHistory.push(avgRisk);
+  if (window.riskScoreHistory.length > 20) window.riskScoreHistory.shift();
+
+  const ctx = document.getElementById("riskTrendChart");
+  const chartData = {
+    labels: window.historyBuffer.times,
+    datasets: [{
+      label: 'Avg Batch Risk Score',
+      data: window.riskScoreHistory,
+      borderColor: '#ff2e63',
+      backgroundColor: 'rgba(255, 46, 99, 0.1)',
+      borderWidth: 2,
+      fill: true,
+      tension: 0.4,
+      pointBackgroundColor: '#ff2e63'
+    }]
+  };
+  
+  if (window.trendChart) { window.trendChart.data = chartData; window.trendChart.update(); }
+  else {
+    window.trendChart = new Chart(ctx, {
+      type: 'line',
+      data: chartData,
+      options: {
+        plugins: { legend: { display: false } },
+        scales: { y: { suggestedMin: 0, suggestedMax: 100 } }
+      }
+    });
+  }
+}
+</script>
+{% endblock %}
