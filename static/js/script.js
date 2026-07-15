@@ -7,12 +7,22 @@ let defaultHistory = {
   vectors: { "Brute Force": 12, "Impossible Travel": 8, "Bad IP": 10, "Quantum": 2 },
   lastSeenRefNum: 0
 };
-try {
-  const cachedHistory = sessionStorage.getItem("sentinel_history");
-  window.historyBuffer = cachedHistory ? JSON.parse(cachedHistory) : defaultHistory;
-} catch (e) {
-  window.historyBuffer = defaultHistory;
-}
+  try {
+    const cachedHistory = sessionStorage.getItem("sentinel_history");
+    if (cachedHistory) {
+      let parsed = JSON.parse(cachedHistory);
+      // Migrate old cache structure to prevent NaN/undefined
+      if (parsed.totalSafe === undefined || parsed.lastSeenRefNum === undefined) {
+        window.historyBuffer = defaultHistory;
+      } else {
+        window.historyBuffer = parsed;
+      }
+    } else {
+      window.historyBuffer = defaultHistory;
+    }
+  } catch (e) {
+    window.historyBuffer = defaultHistory;
+  }
 
 if (typeof Chart !== 'undefined') {
   Chart.defaults.color = '#7a8699';
