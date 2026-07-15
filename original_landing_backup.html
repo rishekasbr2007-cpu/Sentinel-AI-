@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SentinelAI | AI-Driven Banking Threat Intelligence</title>
+<style>
+  :root {
+    --bg: #0b0f19;
+    --panel: #121826;
+    --border: #232d42;
+    --text: #e5e9f0;
+    --muted: #8b96a8;
+    --accent: #3b82f6;
+    --accent-glow: rgba(59, 130, 246, 0.25);
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:"Segoe UI",Roboto,Arial,sans-serif; }
+
+  .nav { display:flex; justify-content:space-between; align-items:center; padding:18px 40px;
+    border-bottom:1px solid var(--border); background:var(--panel); }
+  .brand { font-size:19px; font-weight:700; color:var(--accent); }
+  .nav-links { display:flex; align-items:center; gap:22px; }
+  .nav-links a { color:var(--muted); text-decoration:none; font-size:14px; }
+  .nav-links a:hover { color:var(--text); }
+  .btn-login { border:1px solid var(--border); padding:7px 16px; border-radius:8px; color:var(--text) !important; }
+  .btn-signup { background:var(--accent); padding:7px 16px; border-radius:8px; color:white !important; }
+
+  .hero { text-align:center; padding:90px 20px 70px;
+    background: radial-gradient(circle at 50% 0%, #10192e, #05070c 65%); }
+  .hero-badge { display:inline-block; background:var(--accent-glow); color:var(--accent);
+    padding:6px 16px; border-radius:20px; font-size:12.5px; font-weight:600; margin-bottom:22px; }
+  .hero h1 { font-size:42px; line-height:1.25; margin:0 0 18px; }
+  .hero-sub { color:var(--muted); max-width:620px; margin:0 auto 30px; font-size:15px; line-height:1.6; }
+  .hero-cta { display:flex; gap:14px; justify-content:center; }
+  .btn { padding:13px 28px; font-size:15px; border-radius:8px; text-decoration:none; font-weight:600; }
+  .btn-hero { background:var(--accent); color:white; }
+  .btn-hero:hover { background:#2563eb; }
+  .btn-hero-secondary { background:transparent; border:1px solid var(--border); color:var(--text); }
+
+  .section { padding:60px 40px; max-width:1200px; margin:0 auto; }
+  .section h2 { font-size:26px; margin-bottom:8px; }
+  .section-sub { color:var(--muted); font-size:14px; margin-bottom:30px; max-width:720px; }
+
+  .grid { display:grid; gap:16px; }
+  .grid-4 { grid-template-columns:repeat(4,1fr); }
+
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:18px; }
+  .feature-card h3 { color:var(--text); font-size:15px; margin:10px 0 6px; }
+  .feature-card p { color:var(--muted); font-size:13px; line-height:1.5; margin:0; }
+  .feature-icon { font-size:24px; }
+
+  .step-text { color:var(--muted); font-size:13px; margin-top:6px; }
+
+  .footer { text-align:center; padding:30px 20px; color:var(--muted); font-size:12.5px;
+    border-top:1px solid var(--border); }
+
+  @media (max-width:900px) {
+    .grid-4 { grid-template-columns:repeat(2,1fr); }
+    .hero h1 { font-size:30px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="nav">
+  <div class="brand">🛡 SentinelAI</div>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how-it-works">How It Works</a>
+    <a href="#data">Data</a>
+    <a class="btn-login" href="{{ url_for('login') }}">Log In</a>
+    <a class="btn-signup" href="{{ url_for('signup') }}">Sign Up</a>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="hero-badge">AI-Driven Threat Intelligence for Banks</div>
+  <h1>Catch fraud and cyber threats<br>before they cost you.</h1>
+  <p class="hero-sub">
+    SentinelAI correlates banking transaction behaviour with cybersecurity telemetry using AI —
+    detecting fraud, cyber threats, and quantum-computing risk in one place, with explainable results
+    security analysts can actually trust.
+  </p>
+  <div class="hero-cta">
+    <a href="{{ url_for('signup') }}" class="btn btn-hero">Get Started Free</a>
+    <a href="{{ url_for('login') }}" class="btn btn-hero-secondary">Log In</a>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <h2>What's Inside The Dashboard</h2>
+  <p class="section-sub">Every page has one job. Here's what each one actually does.</p>
+
+  <div class="grid grid-4">
+    <div class="card feature-card">
+      <div class="feature-icon">📊</div>
+      <h3>Dashboard</h3>
+      <p>Quick overview — safe vs. suspicious vs. fraud counts, plus top AI-flagged transactions.</p>
+    </div>
+    <div class="card feature-card">
+      <div class="feature-icon">💳</div>
+      <h3>Live Transaction Monitoring</h3>
+      <p>Scores individual transactions in real time, showing each one's risk score as it's evaluated.</p>
+    </div>
+    <div class="card feature-card">
+      <div class="feature-icon">🌐</div>
+      <h3>Cybersecurity Telemetry</h3>
+      <p>Login/session signals — failed logins, encryption used, session length — tied to each transaction.</p>
+    </div>
+    <div class="card feature-card">
+      <div class="feature-icon">🧠</div>
+      <h3>AI Threat Detection</h3>
+      <p>The model's verdict on each flagged transaction, plus a plain-English reason why.</p>
+    </div>
+    <div class="card feature-card">
+      <div class="feature-icon">📈</div>
+      <h3>Fraud Analytics</h3>
+      <p>Aggregate charts and trends — how much fraud, how severe, how it's distributed.</p>
+    </div>
+    <div class="card feature-card">
+      <div class="feature-icon">⚛</div>
+      <h3>Quantum Risk Monitor</h3>
+      <p>Flags sessions using outdated encryption that could be broken by future quantum computers.</p>
+    </div>
+    <div class="card feature-card">
+      <div class="feature-icon">📄</div>
+      <h3>Reports & Alerts</h3>
+      <p>A permanent, saved log of every medium/high-risk transaction ever flagged.</p>
+    </div>
+    <div class="card feature-card">
+      <div class="feature-icon">⚙</div>
+      <h3>Admin Settings</h3>
+      <p>Manage registered analyst accounts and view login attempt history.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="how-it-works">
+  <h2>How It Works</h2>
+  <div class="grid grid-4">
+    <div class="card"><strong>1. Log in</strong><p class="step-text">Analyst signs in securely.</p></div>
+    <div class="card"><strong>2. Data is scored</strong><p class="step-text">AI model scores real transaction + cyber telemetry data.</p></div>
+    <div class="card"><strong>3. Risk is explained</strong><p class="step-text">Every flag comes with a plain-English reason, not a black box.</p></div>
+    <div class="card"><strong>4. Analyst acts</strong><p class="step-text">Review alerts, monitor trends, take action.</p></div>
+  </div>
+</section>
+
+<section class="section" id="data">
+  <h2>Where The Data Comes From</h2>
+  <p class="section-sub">
+    Trained on real, publicly available datasets (Kaggle's Credit Card Fraud Detection dataset and a real
+    Cybersecurity Intrusion Detection dataset) — not fake or randomly generated numbers. It does not connect
+    to any live bank system; in production, the same model would take in a bank's real transaction and
+    security log feeds instead.
+  </p>
+</section>
+
+<footer class="footer">
+  SentinelAI — Hackathon Prototype · Problem Statement 2: AI-Driven Correlation of Cybersecurity Telemetry & Transactional Behaviour
+</footer>
+
+</body>
+</html>
