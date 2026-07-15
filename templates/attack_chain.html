@@ -27,19 +27,11 @@
 {% block scripts %}
 <script>
 let network = null;
+let globalNodes = new vis.DataSet();
+let globalEdges = new vis.DataSet();
 
 function renderChain(data) {
-  // We want to link nodes that share account_id or ip_address.
-  const nodes = new vis.DataSet();
-  const edges = new vis.DataSet();
-  
-  // Only look at suspicious/flagged transactions for the graph to reduce noise
   const suspicious = data.transactions.filter(t => t.risk_level !== 'Low' || t.early_warning);
-  
-  if(suspicious.length === 0) {
-    document.getElementById('mynetwork').innerHTML = '<div class="empty-state" style="padding-top:200px;">No suspicious activity to link.</div>';
-    return;
-  }
   const edgesArr = [];
   
   // Create edges based on correlation
@@ -49,32 +41,46 @@ function renderChain(data) {
       let t2 = suspicious[j];
       
       if(t1.account_id === t2.account_id) {
-        edgesArr.push({ from: t1.ref, to: t2.ref, label: 'Same Account', font: { color: '#7a8699', size: 10, align: 'middle' }, color: { color: '#3b4252' }, arrows: 'to' });
+        edgesArr.push({ id: t1.ref + '-' + t2.ref, from: t1.ref, to: t2.ref, label: 'Same Account', font: { color: '#7a8699', size: 10, align: 'middle' }, color: { color: '#3b4252' }, arrows: 'to' });
       }
       else if(t1.ip_address === t2.ip_address) {
-        edgesArr.push({ from: t1.ref, to: t2.ref, label: 'Same IP', font: { color: '#7a8699', size: 10, align: 'middle' }, color: { color: '#3b4252' }, arrows: 'to' });
+        edgesArr.push({ id: t1.ref + '-' + t2.ref, from: t1.ref, to: t2.ref, label: 'Same IP', font: { color: '#7a8699', size: 10, align: 'middle' }, color: { color: '#3b4252' }, arrows: 'to' });
       }
     }
   }
 
-  if(edgesArr.length === 0) {
+  // If there's truly no data ever seen, show empty state
+  if(edgesArr.length === 0 && globalEdges.length === 0) {
+    if (network) { network.destroy(); network = null; }
     document.getElementById('mynetwork').innerHTML = '<div class="empty-state" style="padding-top:200px;">No correlated attack chains detected yet. Waiting for live data matches...</div>';
     return;
   }
   
-  document.getElementById('mynetwork').innerHTML = ''; // clear empty state
+  // Initialize the network once
+  if (!network) {
+    document.getElementById('mynetwork').innerHTML = ''; // clear empty state
+    const container = document.getElementById('mynetwork');
+    const graphData = { nodes: globalNodes, edges: globalEdges };
+    const options = {
+      physics: {
+        barnesHut: { gravitationalConstant: -2000, centralGravity: 0.3, springLength: 95 }
+      },
+      interaction: { hover: true, tooltipDelay: 200 }
+    };
+    network = new vis.Network(container, graphData, options);
+  }
 
-  // Get nodes that are part of an edge
+  // Identify nodes that actually connect to something
   const connectedRefs = new Set();
   edgesArr.forEach(e => {
     connectedRefs.add(e.from);
     connectedRefs.add(e.to);
   });
 
-  // Add nodes (only connected ones)
-  suspicious.filter(t => connectedRefs.has(t.ref)).forEach(t => {
+  // Build the node objects
+  const newNodes = suspicious.filter(t => connectedRefs.has(t.ref)).map(t => {
     let color = t.risk_level === 'High' ? '#ff2e63' : (t.early_warning ? '#00fff2' : '#ffb800');
-    nodes.add({
+    return {
       id: t.ref,
       label: t.ref + '\n$' + (t.amount || 0) + '\n' + (t.early_warning ? 'Warning' : t.risk_level),
       shape: 'box',
@@ -85,26 +91,12 @@ function renderChain(data) {
       },
       font: { color: '#e6f1ff', face: 'Fira Code', size: 12 },
       title: 'Account: ' + t.account_id + '<br>IP: ' + t.ip_address + '<br>' + t.explanation
-    });
+    };
   });
 
-  edges.add(edgesArr);
-
-
-  const container = document.getElementById('mynetwork');
-  const graphData = { nodes: nodes, edges: edges };
-  const options = {
-    physics: {
-      barnesHut: { gravitationalConstant: -2000, centralGravity: 0.3, springLength: 95 }
-    },
-    interaction: { hover: true, tooltipDelay: 200 }
-  };
-  
-  if (network) {
-    network.setData(graphData);
-  } else {
-    network = new vis.Network(container, graphData, options);
-  }
+  // Use update() to smoothly add/modify without destroying the whole physics canvas
+  globalNodes.update(newNodes);
+  globalEdges.update(edgesArr);
 }
 </script>
 {% endblock %}
