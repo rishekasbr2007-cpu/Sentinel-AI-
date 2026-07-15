@@ -50,6 +50,9 @@ async function runAnalysis(batchSize, onDone) {
       data.transactions.reverse();
     }
     
+    // Save to sessionStorage for instant cross-page rendering
+    try { sessionStorage.setItem("sentinel_cachedData", JSON.stringify(data)); } catch(e) {}
+    
     // Update history buffer
     if (data.summary) {
       const time = new Date().toLocaleTimeString();
@@ -118,6 +121,17 @@ document.addEventListener("DOMContentLoaded", () => {
       
       const isLive = localStorage.getItem("liveMode_" + window.location.pathname) === "true";
       checkbox.checked = isLive;
+      
+      // INSTANT RENDER: Pull globally cached data and render immediately so charts don't flicker/blank
+      try {
+        const cachedStr = sessionStorage.getItem("sentinel_cachedData");
+        if (cachedStr) {
+          const cachedData = JSON.parse(cachedStr);
+          window.currentBatchData = cachedData.transactions ? [...cachedData.transactions] : [];
+          // Some specific render functions (like live monitoring) need riskScoreHistory preserved
+          renderFn(cachedData);
+        }
+      } catch(e) {}
       
       if (isLive) {
         toggleLiveMode(checkbox, 200, renderFn);
