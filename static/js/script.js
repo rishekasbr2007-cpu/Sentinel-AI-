@@ -57,17 +57,20 @@ async function runAnalysis(batchSize, onDone) {
       return;
     }
     
+    console.log(`[Sentinel] API Response -> Fetched ${data.transactions ? data.transactions.length : 0} total records. Summary Totals (from server):`, data.summary);
+    
     // Update history buffer by processing new transactions (for spiky line graphs) and accumulating totals (for growing bar/pie charts)
     if (data.transactions) {
       let newSafe = 0, newWarn = 0, newDanger = 0, newQuantum = 0;
+      let newCount = 0;
       
-      // Iterate from oldest to newest to capture chronological updates
-      let revTxs = [...data.transactions].reverse();
-      revTxs.forEach(t => {
+      // Iterate in chronological order (data.transactions is already oldest to newest)
+      data.transactions.forEach(t => {
         let match = t.ref.match(/TX-SIM-(\d+)/);
         let refNum = match ? parseInt(match[1]) : 0;
         if (refNum > window.historyBuffer.lastSeenRefNum) {
           window.historyBuffer.lastSeenRefNum = refNum;
+          newCount++;
           
           let isSafe = (t.risk_level === "Low" && !t.early_warning);
           let isWarn = (t.risk_level === "Medium" || t.early_warning);
@@ -117,6 +120,8 @@ async function runAnalysis(batchSize, onDone) {
       data.summary.quantum_flags = window.historyBuffer.totalQuantum;
       data.vectors = window.historyBuffer.vectors;
       
+      console.log(`[Sentinel] Processed ${newCount} completely new transactions this cycle. Global Safe: ${window.historyBuffer.totalSafe}, Suspicious: ${window.historyBuffer.totalSuspicious}. Updating charts now...`);
+      
       try { sessionStorage.setItem("sentinel_history", JSON.stringify(window.historyBuffer)); } catch(e) {}
     }
     
@@ -141,6 +146,7 @@ function riskPillClass(level) {
 let globalLiveModeTimer = null;
 
 async function globalFetchTick() {
+  console.log("[Sentinel] Background Timer Tick -> Triggering fetch...");
   let localRender = null;
   const checkbox = document.querySelector('input[type="checkbox"][onchange^="toggleLiveMode"]');
   if (checkbox) {
@@ -157,11 +163,13 @@ function toggleLiveMode(checkbox, batchSize, renderFn) {
   sessionStorage.setItem("globalLiveMode", isOn ? "true" : "false");
   
   if (isOn) {
+    console.log("[Sentinel] Live Mode ON -> Starting 15s background polling");
     if(!globalLiveModeTimer) {
       runAnalysis(200, renderFn);
       globalLiveModeTimer = setInterval(globalFetchTick, 15000);
     }
   } else {
+    console.log("[Sentinel] Live Mode OFF -> Stopping background polling");
     if (globalLiveModeTimer) {
       clearInterval(globalLiveModeTimer);
       globalLiveModeTimer = null;
