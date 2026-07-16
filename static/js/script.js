@@ -138,58 +138,73 @@ function riskPillClass(level) {
 }
 
 // ---------- Live Mode: auto-refresh the analysis on an interval to feel real-time ----------
-let liveModeTimer = null;
+let globalLiveModeTimer = null;
+
+async function globalFetchTick() {
+  let localRender = null;
+  const checkbox = document.querySelector('input[type="checkbox"][onchange^="toggleLiveMode"]');
+  if (checkbox) {
+    const match = checkbox.getAttribute("onchange").match(/toggleLiveMode\([^,]+,\s*(\d+),\s*([a-zA-Z0-9_]+)\)/);
+    if (match) {
+      localRender = window[match[2]];
+    }
+  }
+  await runAnalysis(200, localRender);
+}
 
 function toggleLiveMode(checkbox, batchSize, renderFn) {
-  if (checkbox) {
-    localStorage.setItem("liveMode_" + window.location.pathname, checkbox.checked ? "true" : "false");
-  }
+  const isOn = checkbox ? checkbox.checked : false;
+  sessionStorage.setItem("globalLiveMode", isOn ? "true" : "false");
   
-  if (checkbox && checkbox.checked) {
-    runAnalysis(batchSize, renderFn); 
-    if(liveModeTimer) clearInterval(liveModeTimer);
-    liveModeTimer = setInterval(() => runAnalysis(batchSize, renderFn), 15000); 
+  if (isOn) {
+    if(!globalLiveModeTimer) {
+      runAnalysis(200, renderFn);
+      globalLiveModeTimer = setInterval(globalFetchTick, 15000);
+    }
   } else {
-    if (liveModeTimer) clearInterval(liveModeTimer);
-    liveModeTimer = null;
+    if (globalLiveModeTimer) {
+      clearInterval(globalLiveModeTimer);
+      globalLiveModeTimer = null;
+    }
   }
 }
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Auto-initialize any page that has a live toggle
+  const isLive = sessionStorage.getItem("globalLiveMode") === "true";
   const checkbox = document.querySelector('input[type="checkbox"][onchange^="toggleLiveMode"]');
   const runBtn = document.getElementById("runBtn");
   
+  let renderFn = null;
   if (checkbox && runBtn) {
     const match = checkbox.getAttribute("onchange").match(/toggleLiveMode\([^,]+,\s*(\d+),\s*([a-zA-Z0-9_]+)\)/);
     if (match) {
       const renderFnName = match[2];
-      const renderFn = window[renderFnName];
+      renderFn = window[renderFnName];
       
-      // Override attributes to strictly use 200 for global consistency
       checkbox.setAttribute("onchange", `toggleLiveMode(this, 200, ${renderFnName})`);
       runBtn.setAttribute("onclick", `runAnalysis(200, ${renderFnName})`);
-      
-      const isLive = localStorage.getItem("liveMode_" + window.location.pathname) === "true";
       checkbox.checked = isLive;
-      
-      // INSTANT RENDER: Pull globally cached data and render immediately so charts don't flicker/blank
-      try {
-        const cachedStr = sessionStorage.getItem("sentinel_cachedData");
-        if (cachedStr) {
-          const cachedData = JSON.parse(cachedStr);
-          window.currentBatchData = cachedData.transactions ? [...cachedData.transactions] : [];
-          // Some specific render functions (like live monitoring) need riskScoreHistory preserved
-          renderFn(cachedData);
-        }
-      } catch(e) {}
-      
-      if (isLive) {
-        toggleLiveMode(checkbox, 200, renderFn);
-      } else {
-        runAnalysis(200, renderFn);
-      }
     }
+  }
+
+  // INSTANT RENDER FROM CACHE
+  try {
+    const cachedStr = sessionStorage.getItem("sentinel_cachedData");
+    if (cachedStr && renderFn) {
+      const cachedData = JSON.parse(cachedStr);
+      window.currentBatchData = cachedData.transactions ? [...cachedData.transactions] : [];
+      renderFn(cachedData);
+    }
+  } catch(e) {}
+  
+  // Start global polling if live mode is enabled, regardless of whether current page has a checkbox
+  if (isLive) {
+    if(!globalLiveModeTimer) {
+      globalLiveModeTimer = setInterval(globalFetchTick, 15000);
+      globalFetchTick();
+    }
+  } else if (renderFn && !sessionStorage.getItem("sentinel_cachedData")) {
+    runAnalysis(200, renderFn);
   }
 });
 

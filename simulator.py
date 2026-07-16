@@ -170,6 +170,8 @@ class DataSimulator:
             with self.lock:
                 for tx in new_txs:
                     self.transactions.append(tx)
+            
+            print(f"[Simulator] Generated {len(new_txs)} new transactions (Live Mode). Total in memory: {len(self.transactions)}")
 
     def start(self):
         t = threading.Thread(target=self._loop, daemon=True)
